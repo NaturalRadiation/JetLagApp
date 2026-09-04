@@ -51,7 +51,6 @@ L.Icon.Default.mergeOptions({
 // a few px of click tolerance so thin lines and small dots are tappable on a phone
 const canvasRenderer = L.canvas({ tolerance: 6 });
 
-const BOROUGH_STYLE = { color: "#64748b", weight: 1, fill: false, interactive: false };
 // the possible area is left as plain map; the ruled-out area (mapBounds minus the
 // possible region) is masked with translucent green
 const RULED_OUT_STYLE = {
@@ -303,6 +302,7 @@ function PreviewLayer({ preview, ctx }) {
 export function MapView({
   boundary,
   boroughs,
+  wards,
   lines,
   stations,
   pois,
@@ -342,7 +342,6 @@ export function MapView({
   // means everything is ruled out, and difference then returns the full boundary)
   const ruledOut = useMemo(() => difference(boundary, region), [boundary, region]);
   const ruledOutKey = useMemo(() => hashJson(ruledOut), [ruledOut]);
-  const boroughKey = useMemo(() => hashJson(boroughs), [boroughs]);
 
   return (
     <>
@@ -363,8 +362,6 @@ export function MapView({
       )}
       <FitToBoundary boundary={boundary} />
 
-      <GeoJSON key={`boroughs-${boroughKey}`} data={boroughs} style={() => BOROUGH_STYLE} />
-
       {ruledOut && (
         <GeoJSON key={`ruled-out-${ruledOutKey}`} data={ruledOut} style={() => RULED_OUT_STYLE} />
       )}
@@ -373,6 +370,8 @@ export function MapView({
         lines={lines}
         stations={stations}
         pois={pois}
+        boroughs={boroughs}
+        wards={wards}
         selectedLine={selectedLine}
         onSelectLine={toggleLine}
       />

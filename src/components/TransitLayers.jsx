@@ -1,7 +1,8 @@
-// toggleable reference overlays: TfL-coloured rail lines and every rail station
-// (both on), plus the seven POI categories (off). clicking a line selects it —
-// brought to front, the rest muted grey — so a route can be traced end to end.
-// all canvas-rendered so the hundreds of markers stay cheap.
+// toggleable reference overlays: borough boundaries (on) and ward boundaries
+// (off), TfL-coloured rail lines and every rail station (both on), plus the seven
+// POI categories (off). clicking a line selects it — brought to front, the rest
+// muted grey — so a route can be traced end to end. all canvas-rendered so the
+// hundreds of markers stay cheap.
 import { useEffect, useRef } from "react";
 import { GeoJSON, LayersControl } from "react-leaflet";
 import L from "leaflet";
@@ -11,6 +12,17 @@ import { POI_LAYERS } from "../game/questionTypes.js";
 const NR_RED = "#c2410c";
 const INK = "#1f2937";
 const MUTED = "#b9bcc2";
+
+const BOROUGH_STYLE = { color: "#475569", weight: 1.2, fill: false, interactive: false };
+// dashed + thinner so wards read as a sub-division of the solid borough lines
+const WARD_STYLE = {
+  color: "#64748b",
+  weight: 0.7,
+  opacity: 0.75,
+  dashArray: "2 3",
+  fill: false,
+  interactive: false,
+};
 
 function lineStyle(feature, selected) {
   const p = feature.properties;
@@ -69,7 +81,15 @@ function bindPoi(label) {
   };
 }
 
-export function TransitLayers({ lines, stations, pois, selectedLine, onSelectLine }) {
+export function TransitLayers({
+  lines,
+  stations,
+  pois,
+  boroughs,
+  wards,
+  selectedLine,
+  onSelectLine,
+}) {
   const linesRef = useRef(null);
   const stationsRef = useRef(null);
 
@@ -89,6 +109,16 @@ export function TransitLayers({ lines, stations, pois, selectedLine, onSelectLin
 
   return (
     <LayersControl position="topright" collapsed>
+      {boroughs && (
+        <LayersControl.Overlay checked name="Borough boundaries">
+          <GeoJSON data={boroughs} style={() => BOROUGH_STYLE} />
+        </LayersControl.Overlay>
+      )}
+      {wards && (
+        <LayersControl.Overlay name={`Ward boundaries (${wards.features.length})`}>
+          <GeoJSON data={wards} style={() => WARD_STYLE} />
+        </LayersControl.Overlay>
+      )}
       {lines && (
         <LayersControl.Overlay checked name="Rail lines">
           <GeoJSON

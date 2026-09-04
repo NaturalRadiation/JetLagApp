@@ -208,6 +208,7 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
         <MapView
           boundary={boundary}
           boroughs={boroughs}
+          wards={wards}
           lines={lines}
           stations={stations}
           pois={pois}
