@@ -1,10 +1,10 @@
-// primary basemap is Protomaps — one self-hosted london.pmtiles vector archive
-// via MapLibre GL, no key, works offline. if the file's missing the map falls
-// back to CARTO raster at runtime. override with VITE_PMTILES_URL, or force with
-// VITE_BASEMAP=carto|protomaps (default auto).
+// basemap: CARTO raster tiles by default (reliable everywhere, incl. GitHub
+// Pages). the self-hosted london.pmtiles vector basemap via MapLibre GL is
+// opt-in with VITE_BASEMAP=protomaps (or "auto" to try it and fall back to
+// CARTO if the archive isn't reachable). VITE_PMTILES_URL overrides the source.
 import { layers, namedFlavor } from "@protomaps/basemaps";
 
-export const BASEMAP_MODE = import.meta.env.VITE_BASEMAP || "auto"; // auto | protomaps | carto
+export const BASEMAP_MODE = import.meta.env.VITE_BASEMAP || "carto"; // carto | auto | protomaps
 
 // absolute URL to the vector archive, resolved against the deployed base path
 export const PMTILES_URL =
