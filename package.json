@@ -1,0 +1,36 @@
+{
+  "name": "jetlag-london-seeker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Seeker tracker for Jet Lag: The Game (Hide and Seek), scoped to London.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare:geo": "node scripts/prepare-geo.mjs",
+    "prepare:transit": "node scripts/prepare-transit.mjs",
+    "prepare:wards": "node scripts/prepare-wards.mjs",
+    "prepare:water": "node scripts/prepare-water.mjs",
+    "prepare:poi": "node scripts/prepare-poi.mjs",
+    "seed:poi": "node scripts/seed-poi.mjs",
+    "seed:water": "node scripts/seed-water.mjs",
+    "prepare:basemap": "node scripts/prepare-basemap.mjs",
+    "test:smoke": "node scripts/smoke-reducer.mjs"
+  },
+  "dependencies": {
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
+    "@protomaps/basemaps": "^5.7.2",
+    "@turf/turf": "7.2.0",
+    "leaflet": "1.9.4",
+    "maplibre-gl": "^6.7.0",
+    "pmtiles": "^4.5.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-leaflet": "4.2.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "5.4.11"
+  }
+}

@@ -1,0 +1,18 @@
+node_modules
+dist
+.DS_Store
+*.local
+.vite
+.claude
+
+# downloaded tooling (pmtiles CLI etc.)
+tools/
+
+# One-time data-generation tooling and its vendored source data. The app and the
+# GitHub Pages build run entirely off the committed public/data/*.geojson and
+# public/london.pmtiles — these are NOT needed to build or serve the app.
+# (Kept out of the repo on request; the working copy still has them for
+# regenerating data locally.)
+raw/
+scripts/prepare-*.mjs
+scripts/seed-*.mjs
