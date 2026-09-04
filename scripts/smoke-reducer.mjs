@@ -72,29 +72,36 @@ const ctx = {
     ])
   ),
 };
-const BM = { lat: 51.5194, lng: -0.127, timestamp: 0 }; // British Museum
+const BM = { lat: 51.519312, lng: -0.126877, timestamp: 0 }; // British Museum (dataset coords)
+const CIRCLE_1MI = Math.PI * 1.609344 * 1.609344; // ~8.13 km2
 const tq = (answer, params) => ({ id: "tc", type: "tentacle", askedFrom: BM, params, answer });
 
-const tYes = deriveRegion(bounds, [tq("yes", { category: "museums", searchRadiusMeters: MILE, reachRadiusMeters: MILE })], ctx);
-check("tentacle yes: non-empty and within the 1mi search circle", km2(tYes) > 0 && km2(tYes) < Math.PI * 1.609 * 1.609 + 0.5);
+// unnamed "yes" -> just the seeker's 1mi circle (every point is nearest to some POI)
+const tYes = deriveRegion(bounds, [tq("yes", { category: "museums", searchRadiusMeters: MILE })], ctx);
+check("tentacle yes (unnamed): ~ the seeker's 1mi circle", km2(tYes) > CIRCLE_1MI * 0.85 && km2(tYes) < CIRCLE_1MI + 0.5);
 
-const tNo = deriveRegion(bounds, [tq("no", { category: "museums", searchRadiusMeters: MILE, reachRadiusMeters: MILE })], ctx);
-check("tentacle no: removes the reachable compound", km2(tNo) < base && km2(tNo) > base * 0.9);
+// "no" -> not within a mile of the seeker: drop the circle
+const tNo = deriveRegion(bounds, [tq("no", { category: "museums", searchRadiusMeters: MILE })], ctx);
+check("tentacle no: removes the seeker's 1mi circle", km2(tNo) < base && km2(tNo) > base * 0.9);
+check("tentacle yes + no partition the board", Math.abs(km2(tYes) + km2(tNo) - base) < 1);
 
+// central London has ~37 museums within a mile of the British Museum, so its
+// nearest-neighbour cell is a small patch around it, well inside the circle
 const tNamed = deriveRegion(
   bounds,
-  [tq("yes", { category: "museums", searchRadiusMeters: MILE, reachRadiusMeters: MILE, namedPoi: { name: "British Museum", lat: 51.5194, lng: -0.127 } })],
+  [tq("yes", { category: "museums", searchRadiusMeters: MILE, namedPoi: { name: "British Museum", lat: 51.519312, lng: -0.126877 } })],
   ctx
 );
-check("tentacle named POI: smaller than the un-named yes", km2(tNamed) > 0 && km2(tNamed) <= km2(tYes) + 0.01);
-check("tentacle named POI centroid near the POI", turf.distance(turf.centroid(tNamed), [-0.127, 51.5194], { units: "kilometers" }) < 1.7);
+check("tentacle named POI: much smaller than the unnamed yes", km2(tNamed) > 0 && km2(tNamed) < km2(tYes) * 0.5);
+check("tentacle named POI centroid near the POI", turf.distance(turf.centroid(tNamed), [-0.126877, 51.519312], { units: "kilometers" }) < 1);
 
-// nowhere near a museum -> "yes" is a contradiction, "no" tells us nothing
+// nowhere near a museum: "yes" is impossible (no POI to be nearest to), "no"
+// still tells us the hider is outside the seeker's circle
 const FARISH = { lat: 51.62, lng: 0.18, timestamp: 0 };
-const tFarYes = deriveRegion(bounds, [{ id: "f", type: "tentacle", askedFrom: FARISH, params: { category: "museums", searchRadiusMeters: MILE, reachRadiusMeters: MILE }, answer: "yes" }], ctx);
-const tFarNo = deriveRegion(bounds, [{ id: "f", type: "tentacle", askedFrom: FARISH, params: { category: "museums", searchRadiusMeters: MILE, reachRadiusMeters: MILE }, answer: "no" }], ctx);
-check("tentacle yes with nothing reachable -> null", tFarYes === null);
-check("tentacle no with nothing reachable -> unchanged", Math.abs(km2(tFarNo) - base) < 0.001);
+const tFarYes = deriveRegion(bounds, [{ id: "f", type: "tentacle", askedFrom: FARISH, params: { category: "museums", searchRadiusMeters: MILE }, answer: "yes" }], ctx);
+const tFarNo = deriveRegion(bounds, [{ id: "f", type: "tentacle", askedFrom: FARISH, params: { category: "museums", searchRadiusMeters: MILE }, answer: "no" }], ctx);
+check("tentacle yes with nothing in range -> null", tFarYes === null);
+check("tentacle no with nothing in range -> still drops the circle", km2(tFarNo) < base && km2(tFarNo) > base * 0.9);
 
 // --- matching ---
 const boroughs = JSON.parse(readFileSync(resolve(root, "public/data/london-boroughs.geojson"), "utf8"));
@@ -196,6 +203,23 @@ if (mctx.coastline) {
 
 const airM = deriveRegion(bounds, [meq("airports", "closer")], mctx);
 check("measuring airports closer: a proper sub-region", km2(airM) > 0 && km2(airM) < base);
+
+// the closer/further boundary must run through the seeker, not sit offset: a
+// step further from the nearest airport lands in "further", a step nearer in "closer"
+{
+  const AF = { lat: 51.53, lng: -0.143, timestamp: 0 };
+  const LCY = [0.0549, 51.5048]; // London City — Camden's nearest airport
+  const dLng = AF.lng - LCY[0];
+  const dLat = AF.lat - LCY[1];
+  const norm = Math.hypot(dLng, dLat);
+  const step = 0.35 / 111; // ~350 m
+  const beyond = [AF.lng + (dLng / norm) * step, AF.lat + (dLat / norm) * step];
+  const nearer = [AF.lng - (dLng / norm) * step, AF.lat - (dLat / norm) * step];
+  const airC = deriveRegion(bounds, [meq("airports", "closer", AF)], mctx);
+  const airF = deriveRegion(bounds, [meq("airports", "further", AF)], mctx);
+  check("measuring airports: ~350 m past the seeker is 'further'", turf.booleanPointInPolygon(beyond, airF));
+  check("measuring airports: ~350 m nearer the airport is 'closer'", turf.booleanPointInPolygon(nearer, airC));
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

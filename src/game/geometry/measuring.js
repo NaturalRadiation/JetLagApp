@@ -1,19 +1,24 @@
 // measuring — "compared to me, are you closer to or further from [category]?"
 // R = the seeker's distance to their own nearest instance; reach = everywhere
-// within R of any instance; closer intersects, further subtracts.
+// within R of any instance; closer intersects, further subtracts. R is used
+// exactly (not rounded) so the closer/further boundary runs through the seeker.
 // stations / airports / POIs are point sets. water / coastline are thousands of
 // fragments, so we grid-sample their vertices and build reach from a distance-
 // field grid + isoband (buffering them or unioning huge circles froze the app).
 // borough / ward borders buffer the boundary lines only.
 // the live preview uses only measuringDistance (R + nearest point, no buffering);
-// reach is computed once on submit and cached per (category, rounded-up R).
+// reach is computed once on submit and cached per (category, R to the metre).
 import * as turf from "@turf/turf";
 import { intersect, difference, unionAll, toPosition } from "./turfHelpers.js";
 import { LONDON_AIRPORTS } from "./matching.js";
 
-const POINT_STEPS = 12;
-const R_INFLATE_POINT = 1 / Math.cos(Math.PI / POINT_STEPS) + 0.02; // ~1.06
-const R_INFLATE_LINE = 1.03;
+// polygon-circle facets for point-set reach: many for sparse sets (few circles,
+// a prominent boundary that must sit on the seeker) down to just enough for
+// dense sets (reach ≈ the whole map there, and thousands of circles to union)
+function pointSteps(n) {
+  return n <= 16 ? 128 : n <= 200 ? 48 : n <= 500 ? 32 : 20;
+}
+const LINE_BUFFER_STEPS = 8;
 
 export const MEASURING_POI_KEYS = [
   "museums",
@@ -126,10 +131,14 @@ function resolve(ctx, cat) {
 // --- distance: cheap, no buffering ---
 
 function nearestPointCoord(seeker, pts) {
+  // weight longitude by cos(lat) so "nearest" is by real distance, not raw degrees
+  const kx = Math.cos((seeker.lat * Math.PI) / 180);
   let best = null;
   let bd = Infinity;
   for (const c of pts) {
-    const d = (c[0] - seeker.lng) ** 2 + (c[1] - seeker.lat) ** 2;
+    const dx = (c[0] - seeker.lng) * kx;
+    const dy = c[1] - seeker.lat;
+    const d = dx * dx + dy * dy;
     if (d < bd) {
       bd = d;
       best = c;
@@ -170,11 +179,6 @@ export function measuringDistance(question, ctx) {
 
 // --- reach: buffered, computed once per question, cached ---
 
-function roundUpR(rKm) {
-  const step = rKm < 2 ? 0.05 : rKm < 10 ? 0.5 : 5;
-  return Math.max(0.05, Math.ceil(rKm / step) * step);
-}
-
 // "within R of a point set" via a distance-field grid + isoband — robust for
 // thousands of far-apart samples where a circle union would blow up
 function reachViaGrid(pts, rKm, boundary, gridKm) {
@@ -208,17 +212,20 @@ function reachViaGrid(pts, rKm, boundary, gridKm) {
 
 function bufferReach(r, rKm, boundary) {
   if (r.kind === "point") {
-    const radius = rKm * R_INFLATE_POINT;
+    const steps = pointSteps(r.pts.length);
+    // circumscribe the true circle exactly: reach stays a gap-free superset while
+    // its edge sits ~1/steps² over R (a few metres), so the boundary hugs the seeker
+    const radius = rKm / Math.cos(Math.PI / steps);
     return unionAll(
-      r.pts.map((c) => turf.circle(c, radius, { units: "kilometers", steps: POINT_STEPS }))
+      r.pts.map((c) => turf.circle(c, radius, { units: "kilometers", steps }))
     );
   }
   if (r.kind === "grid") {
-    const reach = reachViaGrid(r.pts, rKm * R_INFLATE_LINE, boundary, r.gridKm);
+    const reach = reachViaGrid(r.pts, rKm, boundary, r.gridKm);
     return reach ? intersect(reach, boundary) : null;
   }
-  // line (borders) — straight-sided buffer, so few steps needed
-  return turf.buffer(r.mls, rKm * R_INFLATE_LINE, { units: "kilometers", steps: 4 });
+  // line (borders) — buffer the border lines by exactly R
+  return turf.buffer(r.mls, rKm, { units: "kilometers", steps: LINE_BUFFER_STEPS });
 }
 
 // { rKm, reach } — `reach` is the "within R of the category" region
@@ -230,13 +237,14 @@ export function measuringReach(question, ctx) {
   const { rKm } = measuringDistance(question, ctx);
   if (rKm == null || !Number.isFinite(rKm)) return { rKm: null, reach: null, unavailable: "no-instances" };
 
-  const rounded = roundUpR(rKm);
-  const key = `${cat}|${rounded}`;
+  // key on R to the metre: a replayed question gives an identical rKm so this
+  // still caches, without the outward bias that rounding R up introduced
+  const key = `${cat}|${rKm.toFixed(3)}`;
   if (_reach.has(key)) return { rKm, reach: _reach.get(key) };
 
   let reach = null;
   try {
-    reach = bufferReach(r, rounded, ctx?.boundary) || null;
+    reach = bufferReach(r, rKm, ctx?.boundary) || null;
   } catch (err) {
     console.error("[measuring] buffer failed", err);
   }

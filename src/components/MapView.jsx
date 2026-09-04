@@ -29,6 +29,7 @@ import { hashJson } from "../lib/hash.js";
 import { difference } from "../game/geometry/turfHelpers.js";
 import { bisectorLine, halfPlane } from "../game/geometry/thermometer.js";
 import { matchingCell } from "../game/geometry/matching.js";
+import { tentacleNearestCell } from "../game/geometry/tentacle.js";
 import { TransitLayers } from "./TransitLayers.jsx";
 import {
   BASEMAP_MODE,
@@ -198,24 +199,31 @@ function PreviewLayer({ preview, ctx }) {
         pathOptions={PREVIEW_STYLE}
       />,
     ];
+    if (preview.namedPoi) {
+      let cell = null;
+      try {
+        cell = tentacleNearestCell(
+          preview.center,
+          preview.searchRadiusMeters,
+          preview.candidates || [],
+          preview.namedPoi
+        );
+      } catch {
+        /* ignore */
+      }
+      if (cell?.geometry) {
+        els.push(
+          <GeoJSON
+            key={`cell-${preview.namedPoi.name}-${hashJson(preview.namedPoi)}`}
+            data={cell}
+            style={() => MATCH_CELL_STYLE}
+          />
+        );
+      }
+    }
     for (const p of preview.candidates || []) {
       const named =
         preview.namedPoi && preview.namedPoi.name === p.name && preview.namedPoi.lng === p.lng;
-      els.push(
-        <Circle
-          key={`reach-${p.name}-${p.lng}`}
-          center={[p.lat, p.lng]}
-          radius={preview.reachRadiusMeters}
-          pathOptions={{
-            color: "#b45309",
-            weight: named ? 1.5 : 0.5,
-            opacity: named ? 0.9 : 0.35,
-            fillColor: "#f59e0b",
-            fillOpacity: named ? 0.2 : 0.07,
-            interactive: false,
-          }}
-        />
-      );
       els.push(
         <CircleMarker
           key={`poi-${p.name}-${p.lng}`}

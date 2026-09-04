@@ -116,7 +116,7 @@ export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange }) {
   const tentacleCandidates = useMemo(() => {
     if (draft.type !== "tentacle" || tentacleR <= 0) return [];
     const pts = categoryPoints(pois?.[draft.tentacleCategory]);
-    return poisInRange(seeker, pts, tentacleR * 2); // reachable = within R1 + R2
+    return poisInRange(seeker, pts, tentacleR); // POIs within the radius of the seeker
   }, [draft.type, draft.tentacleCategory, pois, seeker, tentacleR]);
 
   const thermoLegMeters = useMemo(() => {
@@ -144,7 +144,6 @@ export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange }) {
         kind: "tentacle",
         center: seeker,
         searchRadiusMeters: tentacleR,
-        reachRadiusMeters: tentacleR,
         category: draft.tentacleCategory,
         candidates: tentacleCandidates,
         namedPoi:
@@ -240,7 +239,6 @@ export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange }) {
         params: {
           category: draft.tentacleCategory,
           searchRadiusMeters: tentacleR,
-          reachRadiusMeters: tentacleR,
           ...(named ? { namedPoi: { name: named.name, lng: named.lng, lat: named.lat } } : {}),
         },
         answer: draft.tentacleAnswer,
@@ -441,7 +439,7 @@ export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange }) {
           </label>
 
           <fieldset className="field">
-            <legend>Radius (search &amp; reach)</legend>
+            <legend>Search radius (from the seeker)</legend>
             <label className="radio">
               <input
                 type="radio"
@@ -487,7 +485,7 @@ export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange }) {
           <AnswerButtons
             options={[
               ["yes", "Named a place"],
-              ["no", "Not within reach"],
+              ["no", "Outside the radius"],
               ["null", "No answer"],
             ]}
             value={draft.tentacleAnswer}
@@ -514,7 +512,7 @@ export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange }) {
           <p className="hint">
             {tentacleCandidates.length}{" "}
             {TENTACLE_CATEGORIES.find((c) => c.key === draft.tentacleCategory)?.label.toLowerCase()}{" "}
-            reachable from the seeker ({formatMeters(tentacleR)} radius).
+            within {formatMeters(tentacleR)} of the seeker.
           </p>
           <button type="submit" disabled={tentacleR <= 0}>
             Log tentacle question
