@@ -18,7 +18,7 @@ import { measuringDistance } from "../game/geometry/measuring.js";
 
 const KM_PER_MILE = 1.609344;
 
-const TYPE_ORDER = ["radar", "thermometer", "measuring", "matching", "tentacle", "photo"];
+const TYPE_ORDER = ["radar", "thermometer", "measuring", "matching", "tentacle"];
 
 const emptyDraft = {
   type: "radar",
@@ -187,7 +187,6 @@ export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange, onT
   ]);
 
   const typeDef = QUESTION_TYPES[draft.type];
-  const active = typeDef?.status === "active";
 
   const thermoShortfall =
     draft.type === "thermometer" &&
@@ -282,28 +281,14 @@ export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange, onT
       <label className="field">
         Type
         <select value={draft.type} onChange={(e) => set({ type: e.target.value })}>
-          {TYPE_ORDER.map((t) => {
-            const d = QUESTION_TYPES[t];
-            const usable = d.status === "active";
-            return (
-              <option key={t} value={t} disabled={!usable}>
-                {d.label}
-                {d.status === "planned" ? " — coming soon" : ""}
-                {d.status === "informational" ? " — no map effect" : ""}
-              </option>
-            );
-          })}
+          {TYPE_ORDER.map((t) => (
+            <option key={t} value={t}>
+              {QUESTION_TYPES[t].label}
+            </option>
+          ))}
         </select>
       </label>
       <p className="hint">{typeDef?.blurb}</p>
-
-      {!active && (
-        <p className="notice">
-          {typeDef?.status === "planned"
-            ? `Not implemented yet — ${typeDef.plannedIn}.`
-            : "This question type has no effect on the London map; log it in notes if you like."}
-        </p>
-      )}
 
       {draft.type === "radar" && (
         <form onSubmit={submit}>
@@ -636,22 +621,6 @@ export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange, onT
             Log measuring question
           </button>
         </form>
-      )}
-
-      {!active && (
-        <button
-          type="button"
-          onClick={() =>
-            onSubmit({
-              type: draft.type,
-              askedFrom: { ...seeker, timestamp: Date.now() },
-              params: {},
-              answer: "null",
-            })
-          }
-        >
-          Log {typeDef?.label} (no map effect)
-        </button>
       )}
     </section>
   );

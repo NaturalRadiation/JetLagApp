@@ -18,5 +18,4 @@ export const ANSWERS_BY_TYPE = {
   measuring: ["closer", "further", "null"],
   matching: ["yes", "no", "null"],
   tentacle: ["yes", "no", "null"],
-  photo: ["null"],
 };

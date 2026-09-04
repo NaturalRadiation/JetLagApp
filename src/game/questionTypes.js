@@ -166,13 +166,6 @@ export const QUESTION_TYPES = {
     },
   },
 
-  photo: {
-    id: "photo",
-    label: "Photo",
-    status: "informational",
-    blurb: "Photo challenge — logged for the record, no map effect.",
-    summarize: () => "photo challenge",
-  },
 };
 
 // nouns that never inform a London map, surfaced so the UI can grey them out
