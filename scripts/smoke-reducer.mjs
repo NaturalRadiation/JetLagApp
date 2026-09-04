@@ -55,6 +55,43 @@ const hotCentroidLng = turf.centroid(hot).geometry.coordinates[0];
 const coldCentroidLng = turf.centroid(cold).geometry.coordinates[0];
 check("hotter half lies east of colder half", hotCentroidLng > coldCentroidLng);
 
+// the split must match ground truth ("closer to end") at every bearing, not just
+// due east/west — a great-circle half-plane drifts kilometres off otherwise
+{
+  const C = { lat: 51.5072, lng: -0.1276 };
+  const legs = {
+    "due north": { lat: C.lat + 0.05, lng: C.lng },
+    NE: { lat: C.lat + 0.04, lng: C.lng + 0.06 },
+    SE: { lat: C.lat - 0.04, lng: C.lng + 0.06 },
+    NNW: { lat: C.lat + 0.06, lng: C.lng - 0.02 },
+  };
+  let worstWrong = 0;
+  for (const [name, E] of Object.entries(legs)) {
+    const h = deriveRegion(bounds, [
+      { id: "t", type: "thermometer", askedFrom: E, params: { start: C, end: E }, answer: "hotter" },
+    ]);
+    const c = deriveRegion(bounds, [
+      { id: "t", type: "thermometer", askedFrom: E, params: { start: C, end: E }, answer: "colder" },
+    ]);
+    check(`thermometer ${name}: hotter + colder partition London`, Math.abs(km2(h) + km2(c) - base) < 2);
+    // sample a grid: every point kept by "hotter" must really be nearer E than C
+    let wrong = 0;
+    for (let lat = 51.3; lat <= 51.68; lat += 0.03)
+      for (let lng = -0.5; lng <= 0.28; lng += 0.03) {
+        const P = [lng, lat];
+        if (!turf.booleanPointInPolygon(P, h)) continue;
+        const dC = turf.distance(P, [C.lng, C.lat]);
+        const dE = turf.distance(P, [E.lng, E.lat]);
+        if (dE - dC > 0.05) {
+          wrong++;
+          worstWrong = Math.max(worstWrong, dE - dC);
+        }
+      }
+    check(`thermometer ${name}: 'hotter' region is genuinely nearer the end`, wrong === 0);
+  }
+  check("thermometer misclassification worst-case < 100 m", worstWrong < 0.1);
+}
+
 // null answer is a no-op
 const r4 = deriveRegion(bounds, [
   { id: "n", type: "radar", askedFrom: CENTER, params: { radiusMeters: 1609.344 }, answer: "null" },

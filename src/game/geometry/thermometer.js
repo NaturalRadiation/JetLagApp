@@ -1,35 +1,55 @@
-// thermometer — "after travelling [distance], am I hotter or colder?" the
-// perpendicular bisector of start->end splits the map; hotter keeps the end
-// side, colder the start side. done as intersect with a big covering rectangle.
+// thermometer — "after travelling from start to end, am I hotter or colder?"
+// the perpendicular bisector of start->end splits the map: hotter is the half
+// closer to end, colder the half closer to start. the covering rectangle is
+// built in a local planar frame (longitude scaled by cos(lat)) so the split
+// stays true at every bearing — a great-circle construction drifts badly for
+// anything other than due east/west travel.
 import * as turf from "@turf/turf";
 import { intersect, toPosition } from "./turfHelpers.js";
 
-// half-width / depth of the covering rectangle, comfortably bigger than London
-const SPAN_KM = 400;
+// covering-rectangle half-size in degrees, comfortably beyond London
+const SPAN_DEG = 3;
 
-// the bisector as a finite segment long enough to cross the map (for the preview)
-export function bisectorLine(start, end) {
+// local planar frame at the segment midpoint: `fwd` is the unit start->end
+// direction, `perp` runs along the bisector, `toLngLat` maps planar x/y back.
+function frame(start, end) {
   const s = toPosition(start);
   const e = toPosition(end);
-  const mid = turf.midpoint(s, e).geometry.coordinates;
-  const bearing = turf.bearing(s, e);
-  const a = turf.destination(mid, SPAN_KM, bearing + 90, { units: "kilometers" }).geometry.coordinates;
-  const b = turf.destination(mid, SPAN_KM, bearing - 90, { units: "kilometers" }).geometry.coordinates;
-  return turf.lineString([a, b]);
+  const mid = [(s[0] + e[0]) / 2, (s[1] + e[1]) / 2];
+  const cosLat = Math.cos((mid[1] * Math.PI) / 180) || 1e-6;
+  let fx = (e[0] - s[0]) * cosLat;
+  let fy = e[1] - s[1];
+  const len = Math.hypot(fx, fy) || 1e-9;
+  fx /= len;
+  fy /= len;
+  return {
+    mid,
+    fwd: [fx, fy],
+    perp: [-fy, fx],
+    toLngLat: (x, y) => [mid[0] + x / cosLat, mid[1] + y],
+  };
+}
+
+// the bisector as a finite segment long enough to cross the map (preview only)
+export function bisectorLine(start, end) {
+  const { perp, toLngLat } = frame(start, end);
+  return turf.lineString([
+    toLngLat(perp[0] * SPAN_DEG, perp[1] * SPAN_DEG),
+    toLngLat(-perp[0] * SPAN_DEG, -perp[1] * SPAN_DEG),
+  ]);
 }
 
 // rectangle covering the half-plane on the side of `toward` ("start" | "end")
 export function halfPlane(start, end, toward) {
-  const s = toPosition(start);
-  const e = toPosition(end);
-  const mid = turf.midpoint(s, e).geometry.coordinates;
-  const bearing = turf.bearing(s, e); // start -> end
-  const edgeA = turf.destination(mid, SPAN_KM, bearing + 90, { units: "kilometers" }).geometry.coordinates;
-  const edgeB = turf.destination(mid, SPAN_KM, bearing - 90, { units: "kilometers" }).geometry.coordinates;
-  const push = toward === "end" ? bearing : bearing + 180;
-  const farA = turf.destination(edgeA, SPAN_KM * 2, push, { units: "kilometers" }).geometry.coordinates;
-  const farB = turf.destination(edgeB, SPAN_KM * 2, push, { units: "kilometers" }).geometry.coordinates;
-  return turf.polygon([[edgeA, edgeB, farB, farA, edgeA]]);
+  const { fwd, perp, toLngLat } = frame(start, end);
+  const sign = toward === "end" ? 1 : -1;
+  const P = SPAN_DEG;
+  const D = 2 * SPAN_DEG;
+  const a = toLngLat(perp[0] * P, perp[1] * P);
+  const b = toLngLat(-perp[0] * P, -perp[1] * P);
+  const c = toLngLat(-perp[0] * P + sign * fwd[0] * D, -perp[1] * P + sign * fwd[1] * D);
+  const d = toLngLat(perp[0] * P + sign * fwd[0] * D, perp[1] * P + sign * fwd[1] * D);
+  return turf.polygon([[a, b, c, d, a]]);
 }
 
 export function applyThermometer(region, question) {

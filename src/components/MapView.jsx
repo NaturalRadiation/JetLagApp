@@ -26,7 +26,7 @@ import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { hashJson } from "../lib/hash.js";
-import { difference } from "../game/geometry/turfHelpers.js";
+import { difference, intersect } from "../game/geometry/turfHelpers.js";
 import { bisectorLine, halfPlane } from "../game/geometry/thermometer.js";
 import { matchingCell } from "../game/geometry/matching.js";
 import { tentacleNearestCell } from "../game/geometry/tentacle.js";
@@ -173,15 +173,35 @@ function PreviewLayer({ preview, ctx }) {
       ];
       els.push(<Polyline key="leg" positions={leg} pathOptions={{ color: "#334155", weight: 2 }} />);
       try {
-        const bis = bisectorLine(preview.start, preview.end);
-        const line = bis.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-        els.push(
-          <Polyline key="bis" positions={line} pathOptions={{ ...PREVIEW_STYLE, fillOpacity: 0 }} />
-        );
-        const hp = halfPlane(preview.start, preview.end, preview.toward || "end");
-        els.push(
-          <GeoJSON key={`hp-${hashJson(preview)}`} data={hp} style={() => PREVIEW_STYLE} />
-        );
+        // both shapes reach hundreds of km past London; Leaflet draws them as
+        // straight lines in Mercator-projected pixel space, which bows away from
+        // the true line over that distance (a few km near London can end up
+        // rendered many km off). clip to the boundary, padded a little, so only
+        // the short — and so undistorted — part near London ever gets drawn.
+        const boundary = ctx?.boundary;
+        const clipBox = boundary
+          ? (() => {
+              const [minX, minY, maxX, maxY] = turf.bbox(boundary);
+              const padX = (maxX - minX) * 0.15;
+              const padY = (maxY - minY) * 0.15;
+              return [minX - padX, minY - padY, maxX + padX, maxY + padY];
+            })()
+          : null;
+
+        let bis = bisectorLine(preview.start, preview.end);
+        if (clipBox) bis = turf.bboxClip(bis, clipBox);
+        if ((bis.geometry.coordinates?.length || 0) >= 2) {
+          const line = bis.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+          els.push(
+            <Polyline key="bis" positions={line} pathOptions={{ ...PREVIEW_STYLE, fillOpacity: 0 }} />
+          );
+        }
+
+        let hp = halfPlane(preview.start, preview.end, preview.toward || "end");
+        if (boundary) hp = intersect(hp, boundary);
+        if (hp) {
+          els.push(<GeoJSON key={`hp-${hashJson(preview)}`} data={hp} style={() => PREVIEW_STYLE} />);
+        }
       } catch {
         /* degenerate (start == end) — skip bisector */
       }
