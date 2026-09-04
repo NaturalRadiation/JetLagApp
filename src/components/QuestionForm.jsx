@@ -62,9 +62,14 @@ function tentacleRadiusMeters(draft) {
   return n * (draft.tentacleRadiusUnit === "km" ? 1000 : METERS_PER_MILE);
 }
 
-export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange }) {
+export function QuestionForm({ seeker, pois, ctx, onSubmit, onPreviewChange, onTypeChange }) {
   const [draft, setDraft] = useState(emptyDraft);
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
+
+  // lets the collapsed mobile sheet show what you're about to log, e.g. "Radar"
+  useEffect(() => {
+    onTypeChange?.(QUESTION_TYPES[draft.type]?.label ?? draft.type);
+  }, [draft.type, onTypeChange]);
 
   const meters = radarMeters(draft);
   const tentacleR = tentacleRadiusMeters(draft);

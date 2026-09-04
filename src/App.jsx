@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { MapView } from "./components/MapView.jsx";
+import { MapToolbar } from "./components/MapToolbar.jsx";
 import { QuestionForm } from "./components/QuestionForm.jsx";
 import { QuestionLog } from "./components/QuestionLog.jsx";
+import { SidebarHandle } from "./components/SidebarHandle.jsx";
 import { TransitLegend } from "./components/TransitLegend.jsx";
 import { useGameSession } from "./hooks/useGameSession.js";
+import { useMediaQuery } from "./hooks/useMediaQuery.js";
+import { useUiPrefs } from "./hooks/useUiPrefs.js";
 
 const LONDON_CENTER = { lat: 51.5072, lng: -0.1276 };
+
+// below this width the sidebar can't sit beside the map (see the matching
+// media query in styles.css) — it becomes a bottom-sheet overlay instead
+const MOBILE_BREAKPOINT = "(max-width: 820px)";
 
 // resolve against the document base so the same build works at the domain root
 // and under /<repo>/ on GitHub Pages
@@ -107,12 +115,18 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
     resetSession,
   } = useGameSession(boundary, ctx);
 
+  const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
+  const { sidebarOpen, setSidebarOpen } = useUiPrefs(isMobile);
+
   const [seeker, setSeeker] = useState(() => {
     const last = session.questions[session.questions.length - 1];
     return last ? { lat: last.askedFrom.lat, lng: last.askedFrom.lng } : LONDON_CENTER;
   });
   const [preview, setPreview] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [activeType, setActiveType] = useState(null); // QuestionForm's current draft type, for the mobile sheet's collapsed summary
+
+  const sheetSummary = `${activeType ?? "Question"} · ${questions.length} logged`;
 
   const selectedIndex = useMemo(
     () => questions.findIndex((q) => q.id === selectedId),
@@ -126,68 +140,80 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
 
   return (
     <div className="app">
-      <aside className="sidebar">
-        <header className="sidebar-head">
-          <h1>London Seeker Tracker</h1>
-          <p className="subtitle">Jet Lag: The Game — Hide and Seek</p>
-        </header>
-
-        <section className="panel">
-          <h2>Seeker position</h2>
-          <p className="hint">
-            Drag the marker or click the map. This is “asked from” for the next question.
-          </p>
-          <div className="coord-row">
-            <label>
-              Lat
-              <input
-                type="number"
-                step="0.0001"
-                value={seeker.lat}
-                onChange={(e) => setSeeker((s) => ({ ...s, lat: Number(e.target.value) }))}
-              />
-            </label>
-            <label>
-              Lng
-              <input
-                type="number"
-                step="0.0001"
-                value={seeker.lng}
-                onChange={(e) => setSeeker((s) => ({ ...s, lng: Number(e.target.value) }))}
-              />
-            </label>
-          </div>
-        </section>
-
-        <QuestionForm
-          seeker={seeker}
-          pois={pois}
-          ctx={ctx}
-          onPreviewChange={setPreview}
-          onSubmit={(q) => {
-            addQuestion(q);
-            setSelectedId(null);
-          }}
+      {isMobile && (
+        <div
+          className={sidebarOpen ? "sidebar-scrim visible" : "sidebar-scrim"}
+          onClick={() => setSidebarOpen(false)}
         />
+      )}
+      <aside className={sidebarOpen ? "sidebar open" : "sidebar"}>
+        {isMobile && (
+          <SidebarHandle open={sidebarOpen} onSetOpen={setSidebarOpen} summary={sheetSummary} />
+        )}
+        <div className="sidebar-scroll">
+          <header className="sidebar-head">
+            <h1>London Seeker Tracker</h1>
+            <p className="subtitle">Jet Lag: The Game — Hide and Seek</p>
+          </header>
 
-        <QuestionLog
-          questions={questions}
-          regionSteps={regionSteps}
-          selectedId={selectedId}
-          emptiedAt={emptiedAt}
-          onSelect={setSelectedId}
-          onUpdate={updateQuestion}
-          onDelete={deleteQuestion}
-          onMove={moveQuestion}
-        />
+          <section className="panel">
+            <h2>Seeker position</h2>
+            <p className="hint">
+              Drag the marker or click the map. This is “asked from” for the next question.
+            </p>
+            <div className="coord-row">
+              <label>
+                Lat
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={seeker.lat}
+                  onChange={(e) => setSeeker((s) => ({ ...s, lat: Number(e.target.value) }))}
+                />
+              </label>
+              <label>
+                Lng
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={seeker.lng}
+                  onChange={(e) => setSeeker((s) => ({ ...s, lng: Number(e.target.value) }))}
+                />
+              </label>
+            </div>
+          </section>
 
-        {(lines || stations) && <TransitLegend />}
+          <QuestionForm
+            seeker={seeker}
+            pois={pois}
+            ctx={ctx}
+            onPreviewChange={setPreview}
+            onTypeChange={setActiveType}
+            onSubmit={(q) => {
+              addQuestion(q);
+              setSelectedId(null);
+            }}
+          />
 
-        <section className="panel">
-          <button className="danger" onClick={resetSession}>
-            Reset game
-          </button>
-        </section>
+          <QuestionLog
+            questions={questions}
+            regionSteps={regionSteps}
+            selectedId={selectedId}
+            emptiedAt={emptiedAt}
+            onSelect={setSelectedId}
+            onUpdate={updateQuestion}
+            onDelete={deleteQuestion}
+            onMove={moveQuestion}
+          />
+
+          {(lines || stations) && <TransitLegend />}
+
+          <section className="panel">
+            <button className="danger" onClick={resetSession}>
+              Reset game
+            </button>
+          </section>
+        </div>
       </aside>
 
       <main className="map">
@@ -205,6 +231,11 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
             </button>
           </div>
         )}
+        <MapToolbar
+          isMobile={isMobile}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen((o) => !o)}
+        />
         <MapView
           boundary={boundary}
           boroughs={boroughs}

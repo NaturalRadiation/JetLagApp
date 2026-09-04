@@ -25,8 +25,14 @@ body {
   flex: 0 0 400px;
   border-right: 1px solid var(--line);
   background: var(--bg);
+}
+
+/* the scrollable part of the sidebar — everything below the drag handle on
+   mobile; on desktop this is just "the whole sidebar", handle isn't rendered */
+.sidebar-scroll {
   overflow-y: auto;
   padding-bottom: 40px;
+  height: 100%;
 }
 
 .sidebar-head {
@@ -48,6 +54,98 @@ body {
 
 .map { position: relative; flex: 1; }
 .leaflet-root { position: absolute; inset: 0; height: 100%; width: 100%; }
+
+/* floating control cluster over the map — sidebar toggle for now, mode/action
+   buttons (place seeker, ruler, GPS) join it in later phases. sits under the
+   open mobile drawer (z-index) so it's tucked away rather than overlapping it. */
+.map-toolbar {
+  position: absolute;
+  right: 10px;
+  bottom: 24px;
+  z-index: 850;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.map-toolbar button {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+}
+.map-toolbar button:active { background: var(--bg); }
+
+/* dims the map behind the open mobile sheet; tapping it closes the sheet.
+   only ever rendered (in JS) under the mobile breakpoint. */
+.sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 880;
+}
+.sidebar-scrim.visible { opacity: 1; pointer-events: auto; }
+
+/* the always-visible strip at the top of the mobile sheet: a grab pill + a
+   one-line summary, doubling as a tap target and a drag handle (see
+   SidebarHandle.jsx — COLLAPSED_PX there must match the 56px used below). */
+.sidebar-handle {
+  flex: 0 0 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 14px 14px 0 0;
+  background: var(--panel);
+  touch-action: none;
+  user-select: none;
+}
+.sidebar-handle-grip { width: 36px; height: 4px; border-radius: 2px; background: var(--line); }
+.sidebar-handle-summary {
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* below this width the sidebar can't sit beside the map (it's the whole
+   screen), so it becomes a bottom-sheet overlay instead: collapsed to just the
+   handle strip peeking up from the bottom edge by default, dragged or tapped
+   up to ~86% of the viewport when open. */
+@media (max-width: 820px) {
+  .app { display: block; position: relative; overflow: hidden; }
+
+  .map { position: absolute; inset: 0; }
+
+  .sidebar {
+    position: fixed;
+    inset: 14% 0 0 0;
+    width: auto;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    border-right: none;
+    border-top: 1px solid var(--line);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -2px 20px rgba(15, 23, 42, 0.25);
+    transform: translateY(calc(100% - 56px));
+    transition: transform 0.28s ease;
+    z-index: 900;
+  }
+  .sidebar.open { transform: translateY(0); }
+
+  .sidebar-scroll { flex: 1; min-height: 0; }
+}
 
 .map-banner {
   position: absolute;
