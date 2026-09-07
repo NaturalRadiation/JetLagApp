@@ -393,6 +393,66 @@ function PreviewLayer({ preview, ctx }) {
   return null;
 }
 
+const SEEKER_STALE_MS = 20000; // no ping for this long -> greyed "last seen"
+
+function fmtAge(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m ago`;
+}
+
+// other seekers, from the room broadcast — purple while live, greyed with a
+// "last seen …" label once their pings go quiet (phone locked / backgrounded /
+// connection dropped). they stay on the map until they resume, pause, or leave.
+function RoomSeekers({ positions }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (positions.length === 0) return undefined;
+    const id = setInterval(() => tick((n) => n + 1), 10000);
+    return () => clearInterval(id);
+  }, [positions.length]);
+
+  return positions
+    .filter((p) => p.role === "seeker" && Number.isFinite(p.lat) && Number.isFinite(p.lng))
+    .map((p) => {
+      // measure from when we received it (local clock) — robust to phones whose
+      // clocks disagree
+      const age = Date.now() - (p.receivedAt || p.ts || 0);
+      const stale = age > SEEKER_STALE_MS;
+      // react-leaflet's CircleMarker/Tooltip don't re-apply pathOptions or
+      // tooltip text on a prop change, so fold the visible state into the key:
+      // "live" while broadcasting, then a per-minute bucket while stale so the
+      // dot flips to grey and the "last seen …" label keeps counting up.
+      const key = stale ? `${p.id}-s${Math.floor(age / 60000)}` : `${p.id}-live`;
+      return (
+        <CircleMarker
+          key={key}
+          center={[p.lat, p.lng]}
+          radius={7}
+          pathOptions={{
+            color: stale ? "#e2e8f0" : "#ffffff",
+            weight: 2,
+            fillColor: stale ? "#94a3b8" : "#7c3aed",
+            fillOpacity: stale ? 0.7 : 1,
+          }}
+        >
+          <Tooltip
+            permanent
+            direction="top"
+            offset={[0, -8]}
+            className={stale ? "seeker-label stale" : "seeker-label"}
+          >
+            {p.name || "Seeker"}
+            {stale ? ` · last seen ${fmtAge(age)}` : ""}
+          </Tooltip>
+        </CircleMarker>
+      );
+    });
+}
+
 export function MapView({
   boundary,
   boroughs,
@@ -406,6 +466,7 @@ export function MapView({
   onSeekerChange,
   mapMode,
   gpsFix,
+  roomPositions = [],
   questions,
   selectedId,
   preview,
@@ -561,6 +622,7 @@ export function MapView({
           </CircleMarker>
         </>
       )}
+      <RoomSeekers positions={roomPositions} />
       <SeekerLayer seeker={seeker} onSeekerChange={onSeekerChange} mapMode={mapMode} />
       </MapContainer>
 

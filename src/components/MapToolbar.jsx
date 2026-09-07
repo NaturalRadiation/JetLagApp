@@ -7,10 +7,13 @@ const MODE_BUTTONS = [
   { mode: "ruler", glyph: "📏", label: "Measure — tap to drop two points" },
 ];
 
-export function MapToolbar({ mode, onModeChange, gpsSupported, gpsOn, onToggleGps }) {
+export function MapToolbar({ mode, onModeChange, role, gpsSupported, gpsOn, onToggleGps }) {
+  // a hider never places an asked-from pin, so drop that mode for them
+  const buttons =
+    role === "hider" ? MODE_BUTTONS.filter((b) => b.mode !== "question") : MODE_BUTTONS;
   return (
     <div className="map-toolbar">
-      {MODE_BUTTONS.map((b) => (
+      {buttons.map((b) => (
         <button
           key={b.mode}
           type="button"

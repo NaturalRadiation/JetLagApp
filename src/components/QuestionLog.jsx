@@ -30,6 +30,7 @@ export function QuestionLog({
   onUpdate,
   onDelete,
   onMove,
+  readOnly = false,
 }) {
   return (
     <section className="panel">
@@ -66,43 +67,49 @@ export function QuestionLog({
                 </span>
               </div>
 
-              <div className="qlog-controls">
-                <select
-                  value={q.answer}
-                  onChange={(e) => onUpdate(q.id, { answer: e.target.value })}
-                  title="Answer"
-                >
-                  {answers.map((a) => (
-                    <option key={a} value={a}>
-                      {ANSWER_LABELS[a] ?? a}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={i === 0}
-                  onClick={() => onMove(q.id, "up")}
-                  title="Move earlier"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  disabled={i === questions.length - 1}
-                  onClick={() => onMove(q.id, "down")}
-                  title="Move later"
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  className="danger"
-                  onClick={() => onDelete(q.id)}
-                  title="Delete and recompute"
-                >
-                  ✕
-                </button>
-              </div>
+              {readOnly ? (
+                <div className="qlog-controls">
+                  <span className="qlog-answer-ro">{ANSWER_LABELS[q.answer] ?? q.answer}</span>
+                </div>
+              ) : (
+                <div className="qlog-controls">
+                  <select
+                    value={q.answer}
+                    onChange={(e) => onUpdate(q.id, { answer: e.target.value })}
+                    title="Answer"
+                  >
+                    {answers.map((a) => (
+                      <option key={a} value={a}>
+                        {ANSWER_LABELS[a] ?? a}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={i === 0}
+                    onClick={() => onMove(q.id, "up")}
+                    title="Move earlier"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    disabled={i === questions.length - 1}
+                    onClick={() => onMove(q.id, "down")}
+                    title="Move later"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={() => onDelete(q.id)}
+                    title="Delete and recompute"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
             </li>
           );
         })}

@@ -293,6 +293,60 @@ button.link { border: 0; background: none; color: var(--accent); padding: 0 4px;
 .qlog-controls { display: flex; gap: 4px; margin-top: 8px; }
 .qlog-controls select { flex: 1; }
 .qlog-controls button { padding: 4px 8px; }
+.qlog-answer-ro { font-size: 12px; color: var(--muted); text-transform: capitalize; }
+
+/* room panel */
+.room-code {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.room-status { font-size: 11px; font-weight: 400; letter-spacing: 0; color: var(--muted); }
+.room-members { list-style: none; margin: 0 0 10px; padding: 0; font-size: 13px; }
+.room-members li { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.room-role {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.room-you {
+  font-size: 11px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 4px;
+  padding: 0 5px;
+}
+.room-share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.room-share-on { color: #15803d; font-weight: 600; }
+.room-share-off { color: var(--muted); font-weight: 600; }
+.room-share .hint { margin: 0; }
+
+.room-logsync { margin: 0 0 10px; font-size: 12px; }
+.room-logsync.room-share-on { font-size: 12px; }
+
+/* permanent name label under a remote seeker's dot */
+.leaflet-tooltip.seeker-label {
+  background: rgba(124, 58, 237, 0.92);
+  color: #fff;
+  border: none;
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+}
+.leaflet-tooltip.seeker-label::before { display: none; }
+.leaflet-tooltip.seeker-label.stale { background: rgba(100, 116, 139, 0.92); font-weight: 500; }
 
 .fatal { padding: 40px; max-width: 560px; margin: 0 auto; }
 .fatal code { background: #e2e8f0; padding: 1px 5px; border-radius: 4px; }

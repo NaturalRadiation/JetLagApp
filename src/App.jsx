@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MapView } from "./components/MapView.jsx";
 import { MapToolbar } from "./components/MapToolbar.jsx";
 import { QuestionForm } from "./components/QuestionForm.jsx";
 import { QuestionLog } from "./components/QuestionLog.jsx";
+import { RoomPanel } from "./components/RoomPanel.jsx";
 import { SidebarHandle } from "./components/SidebarHandle.jsx";
 import { TransitLegend } from "./components/TransitLegend.jsx";
 import { useGameSession } from "./hooks/useGameSession.js";
 import { useGeolocation } from "./hooks/useGeolocation.js";
 import { useMediaQuery } from "./hooks/useMediaQuery.js";
+import { useRoom } from "./hooks/useRoom.js";
+import { useRoomSession } from "./hooks/useRoomSession.js";
 import { useUiPrefs } from "./hooks/useUiPrefs.js";
 
 const LONDON_CENTER = { lat: 51.5072, lng: -0.1276 };
@@ -104,6 +107,35 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
     () => ({ pois, boroughs, wards, water, coastline, stations, boundary }),
     [pois, boroughs, wards, water, coastline, stations, boundary]
   );
+
+  const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
+  const { sidebarOpen, setSidebarOpen, mapMode, setMapMode, room, setRoom, clientId } =
+    useUiPrefs(isMobile);
+  const {
+    members: roomMembers,
+    positions: roomPositions,
+    status: roomStatus,
+    cloud: roomCloud,
+    sendPosition,
+    stopSharing,
+  } = useRoom(room, clientId);
+  const isHider = room?.role === "hider";
+  const isSeeker = room?.role === "seeker";
+
+  // the shared question log — seekers publish it, everyone replays it locally
+  const {
+    remoteSession,
+    publishSession,
+    sessionStatus: logSyncStatus,
+    primed: logPrimed,
+  } = useRoomSession(room);
+  const sync = useMemo(
+    () =>
+      room
+        ? { role: room.role, remoteSession, publish: publishSession, primed: logPrimed }
+        : null,
+    [room, remoteSession, publishSession, logPrimed]
+  );
   const {
     session,
     questions,
@@ -114,14 +146,39 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
     deleteQuestion,
     moveQuestion,
     resetSession,
-  } = useGameSession(boundary, ctx);
+  } = useGameSession(boundary, ctx, sync);
 
-  const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
-  const { sidebarOpen, setSidebarOpen, mapMode, setMapMode } = useUiPrefs(isMobile);
+  // a hider doesn't place an asked-from pin — keep them out of question mode
+  useEffect(() => {
+    if (isHider && mapMode === "question") setMapMode("default");
+  }, [isHider, mapMode, setMapMode]);
 
   // GPS is session-only and starts only on an explicit toggle — never on load
   const [gpsOn, setGpsOn] = useState(false);
   const { supported: gpsSupported, fix: gpsFix, error: gpsError } = useGeolocation(gpsOn);
+
+  // seekers broadcast their location to the room by default; pausable per the
+  // "bathroom break" case. re-broadcast every few seconds even when stationary
+  // so other players' dots stay live rather than going stale.
+  const [sharingPaused, setSharingPaused] = useState(false);
+  const sharing = isSeeker && gpsFix != null && !sharingPaused;
+  useEffect(() => {
+    if (!sharing) return undefined;
+    const send = () =>
+      sendPosition({ lat: gpsFix.lat, lng: gpsFix.lng, accuracy: gpsFix.accuracy, ts: Date.now() });
+    send();
+    const id = setInterval(send, 4000);
+    return () => clearInterval(id);
+  }, [sharing, gpsFix, sendPosition]);
+  // when sharing stops (pause / GPS off / left the room), drop our dot for others
+  const wasSharingRef = useRef(false);
+  useEffect(() => {
+    if (sharing) wasSharingRef.current = true;
+    else if (wasSharingRef.current) {
+      wasSharingRef.current = false;
+      stopSharing();
+    }
+  }, [sharing, stopSharing]);
 
   const [seeker, setSeeker] = useState(() => {
     const last = session.questions[session.questions.length - 1];
@@ -161,6 +218,33 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
             <p className="subtitle">Jet Lag: The Game — Hide and Seek</p>
           </header>
 
+          <RoomPanel
+            room={room}
+            members={roomMembers}
+            status={roomStatus}
+            logSync={logSyncStatus}
+            cloud={roomCloud}
+            onJoin={setRoom}
+            onLeave={() => {
+              stopSharing(); // drop our dot for others before the channel tears down
+              setRoom(null);
+              setSharingPaused(false);
+            }}
+            gpsOn={gpsOn}
+            sharing={sharing}
+            sharingPaused={sharingPaused}
+            onToggleShare={() => setSharingPaused((v) => !v)}
+          />
+
+          {isHider ? (
+            <section className="panel">
+              <h2>You're hiding</h2>
+              <p className="hint">
+                The seekers ask the questions — you're watching the map narrow down. Your
+                location isn't shared.
+              </p>
+            </section>
+          ) : (
           <section className="panel">
             <h2>Seeker position</h2>
             <p className="hint">
@@ -197,18 +281,21 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
               </button>
             )}
           </section>
+          )}
 
-          <QuestionForm
-            seeker={seeker}
-            pois={pois}
-            ctx={ctx}
-            onPreviewChange={setPreview}
-            onTypeChange={setActiveType}
-            onSubmit={(q) => {
-              addQuestion(q);
-              setSelectedId(null);
-            }}
-          />
+          {!isHider && (
+            <QuestionForm
+              seeker={seeker}
+              pois={pois}
+              ctx={ctx}
+              onPreviewChange={setPreview}
+              onTypeChange={setActiveType}
+              onSubmit={(q) => {
+                addQuestion(q);
+                setSelectedId(null);
+              }}
+            />
+          )}
 
           <QuestionLog
             questions={questions}
@@ -219,6 +306,7 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
             onUpdate={updateQuestion}
             onDelete={deleteQuestion}
             onMove={moveQuestion}
+            readOnly={isHider}
           />
 
           {(lines || stations) && <TransitLegend />}
@@ -249,6 +337,7 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
         <MapToolbar
           mode={mapMode}
           onModeChange={setMapMode}
+          role={room?.role}
           gpsSupported={gpsSupported}
           gpsOn={gpsOn}
           onToggleGps={() => setGpsOn((v) => !v)}
@@ -271,6 +360,7 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
           onSeekerChange={setSeeker}
           mapMode={mapMode}
           gpsFix={gpsFix}
+          roomPositions={roomPositions}
           questions={questions}
           selectedId={selectedId}
           preview={preview}

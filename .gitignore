@@ -4,6 +4,7 @@ dist
 *.local
 .vite
 .claude
+docs/
 
 # downloaded tooling (pmtiles CLI etc.)
 tools/
