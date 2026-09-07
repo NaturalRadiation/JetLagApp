@@ -99,13 +99,23 @@ function FitToBoundary({ boundary }) {
   return null;
 }
 
-function SeekerLayer({ seeker, onSeekerChange }) {
+function SeekerLayer({ seeker, onSeekerChange, mapMode }) {
   const markerRef = useRef(null);
+  // read the mode through a ref so the map click handler always sees the
+  // current value, regardless of how react-leaflet re-binds the listener
+  const modeRef = useRef(mapMode);
+  modeRef.current = mapMode;
   useMapEvents({
     click(e) {
+      if (modeRef.current !== "question") return; // "default"/"ruler": tap doesn't move the pin
       onSeekerChange({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
   });
+
+  // the seeker marker is the "asked from" pin — only shown, and movable, in
+  // question mode; default and ruler leave the map clear
+  if (mapMode !== "question") return null;
+
   return (
     <Marker
       draggable
@@ -124,6 +134,70 @@ function SeekerLayer({ seeker, onSeekerChange }) {
         Seeker
       </Tooltip>
     </Marker>
+  );
+}
+
+const RULER_COLOR = "#0e7490";
+const rulerPinIcon = L.divIcon({ className: "ruler-pin", iconSize: [16, 16] });
+
+// ruler-mode map click: fill A then B, then move whichever point is nearer the
+// tap. `linePins` is `pins` with the mid-drag point overridden, so the line and
+// (via MapView) the readout follow a pin live while it's dragged.
+function RulerLayer({ mapMode, pins, linePins, onChange, onDrag }) {
+  const modeRef = useRef(mapMode);
+  modeRef.current = mapMode;
+  const pinsRef = useRef(pins);
+  pinsRef.current = pins;
+  useMapEvents({
+    click(e) {
+      if (modeRef.current !== "ruler") return;
+      const p = { lat: e.latlng.lat, lng: e.latlng.lng };
+      const cur = pinsRef.current;
+      if (cur.length < 2) {
+        onChange([...cur, p]);
+        return;
+      }
+      const near = (a) => (a.lat - p.lat) ** 2 + (a.lng - p.lng) ** 2;
+      onChange(near(cur[0]) <= near(cur[1]) ? [p, cur[1]] : [cur[0], p]);
+    },
+  });
+
+  // stable position refs: a re-render mid-drag (from onDrag) must not hand the
+  // dragged marker a "new" position, or react-leaflet fights Leaflet's own drag
+  const positions = useMemo(() => pins.map((p) => [p.lat, p.lng]), [pins]);
+
+  if (mapMode !== "ruler") return null;
+
+  return (
+    <>
+      {pins.map((p, i) => (
+        <Marker
+          key={`ruler-${i}`}
+          position={positions[i]}
+          icon={rulerPinIcon}
+          draggable
+          eventHandlers={{
+            drag(e) {
+              const { lat, lng } = e.target.getLatLng();
+              onDrag({ index: i, lat, lng });
+            },
+            dragend(e) {
+              const { lat, lng } = e.target.getLatLng();
+              onDrag(null);
+              onChange((prev) => prev.map((pt, j) => (j === i ? { lat, lng } : pt)));
+            },
+          }}
+        >
+          <Tooltip>{i === 0 ? "A" : "B"}</Tooltip>
+        </Marker>
+      ))}
+      {linePins.length === 2 && (
+        <Polyline
+          positions={linePins.map((p) => [p.lat, p.lng])}
+          pathOptions={{ color: RULER_COLOR, weight: 2, dashArray: "6 4" }}
+        />
+      )}
+    </>
   );
 }
 
@@ -330,6 +404,8 @@ export function MapView({
   region,
   seeker,
   onSeekerChange,
+  mapMode,
+  gpsFix,
   questions,
   selectedId,
   preview,
@@ -357,6 +433,26 @@ export function MapView({
     (name) => setSelectedLine((cur) => (cur === name ? null : name)),
     []
   );
+
+  // ruler tool: 0-2 dropped points (kept across mode switches, cleared by
+  // button); rulerDrag holds a point's live position while it's being dragged
+  // so the line + distance track it without re-binding the marker mid-drag
+  const [rulerPins, setRulerPins] = useState([]);
+  const [rulerDrag, setRulerDrag] = useState(null); // { index, lat, lng } | null
+  const effRulerPins =
+    rulerDrag != null
+      ? rulerPins.map((p, i) =>
+          i === rulerDrag.index ? { lat: rulerDrag.lat, lng: rulerDrag.lng } : p
+        )
+      : rulerPins;
+  const rulerKm =
+    effRulerPins.length === 2
+      ? turf.distance(
+          [effRulerPins[0].lng, effRulerPins[0].lat],
+          [effRulerPins[1].lng, effRulerPins[1].lat],
+          { units: "kilometers" }
+        )
+      : null;
 
   // area eliminated so far = whole map minus what's still possible (a null region
   // means everything is ruled out, and difference then returns the full boundary)
@@ -427,9 +523,77 @@ export function MapView({
         );
       })}
 
-      <PreviewLayer preview={preview} ctx={ctx} />
-      <SeekerLayer seeker={seeker} onSeekerChange={onSeekerChange} />
+      {/* the unlogged-question preview only makes sense while composing one */}
+      {mapMode === "question" && <PreviewLayer preview={preview} ctx={ctx} />}
+      <RulerLayer
+        mapMode={mapMode}
+        pins={rulerPins}
+        linePins={effRulerPins}
+        onChange={setRulerPins}
+        onDrag={setRulerDrag}
+      />
+      {gpsFix && (
+        <>
+          <Circle
+            center={[gpsFix.lat, gpsFix.lng]}
+            radius={gpsFix.accuracy || 0}
+            pathOptions={{
+              color: "#2563eb",
+              weight: 1,
+              opacity: 0.4,
+              fillColor: "#3b82f6",
+              fillOpacity: 0.12,
+              interactive: false,
+            }}
+          />
+          <CircleMarker
+            center={[gpsFix.lat, gpsFix.lng]}
+            radius={7}
+            pathOptions={{
+              color: "#ffffff",
+              weight: 3,
+              fillColor: "#2563eb",
+              fillOpacity: 1,
+              interactive: false,
+            }}
+          >
+            <Tooltip>You{gpsFix.accuracy ? ` (±${Math.round(gpsFix.accuracy)} m)` : ""}</Tooltip>
+          </CircleMarker>
+        </>
+      )}
+      <SeekerLayer seeker={seeker} onSeekerChange={onSeekerChange} mapMode={mapMode} />
       </MapContainer>
+
+      {mapMode === "ruler" && (
+        <div className="ruler-readout">
+          {rulerPins.length < 2 ? (
+            <span>Tap the map to place point {rulerPins.length === 0 ? "A" : "B"}</span>
+          ) : (
+            <span>
+              {(rulerKm / 1.609344).toFixed(2)} mi · {rulerKm.toFixed(2)} km
+            </span>
+          )}
+          {gpsFix && (
+            <button
+              type="button"
+              className="link"
+              onClick={() =>
+                setRulerPins((prev) => {
+                  const a = { lat: gpsFix.lat, lng: gpsFix.lng };
+                  return prev.length < 2 ? [a, ...prev] : [a, prev[1]];
+                })
+              }
+            >
+              A = my location
+            </button>
+          )}
+          {rulerPins.length > 0 && (
+            <button type="button" className="link" onClick={() => setRulerPins([])}>
+              Clear
+            </button>
+          )}
+        </div>
+      )}
     </>
   );
 }

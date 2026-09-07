@@ -55,9 +55,9 @@ body {
 .map { position: relative; flex: 1; }
 .leaflet-root { position: absolute; inset: 0; height: 100%; width: 100%; }
 
-/* floating control cluster over the map — sidebar toggle for now, mode/action
-   buttons (place seeker, ruler, GPS) join it in later phases. sits under the
-   open mobile drawer (z-index) so it's tucked away rather than overlapping it. */
+/* floating control cluster over the map — the map interaction-mode switch now,
+   with the ruler button and a GPS toggle to follow. sits under the open mobile
+   drawer (z-index) so it's tucked away rather than overlapping it. */
 .map-toolbar {
   position: absolute;
   right: 10px;
@@ -77,8 +77,63 @@ body {
   font-size: 18px;
   line-height: 1;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+  cursor: pointer;
 }
 .map-toolbar button:active { background: var(--bg); }
+.map-toolbar button.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ruler-mode draggable point markers (divIcon dots) */
+.ruler-pin {
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #0e7490;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.35);
+  cursor: grab;
+}
+.ruler-pin:active { cursor: grabbing; }
+
+/* ruler-mode distance readout — bottom-left, opposite the toolbar */
+.ruler-readout {
+  position: absolute;
+  left: 12px;
+  bottom: 24px;
+  z-index: 850;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* transient GPS status (locating / error) — bottom-centre */
+.gps-status {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 850;
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+  font-size: 13px;
+  text-align: center;
+}
+.gps-status.error { color: var(--danger); border-color: var(--danger); }
+
+.snap-gps { margin-top: 8px; width: 100%; }
 
 /* dims the map behind the open mobile sheet; tapping it closes the sheet.
    only ever rendered (in JS) under the mobile breakpoint. */
@@ -145,6 +200,11 @@ body {
   .sidebar.open { transform: translateY(0); }
 
   .sidebar-scroll { flex: 1; min-height: 0; }
+
+  /* clear the collapsed sheet handle (56px) peeking up from the bottom edge */
+  .map-toolbar,
+  .ruler-readout,
+  .gps-status { bottom: 76px; }
 }
 
 .map-banner {

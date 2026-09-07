@@ -6,6 +6,7 @@ import { QuestionLog } from "./components/QuestionLog.jsx";
 import { SidebarHandle } from "./components/SidebarHandle.jsx";
 import { TransitLegend } from "./components/TransitLegend.jsx";
 import { useGameSession } from "./hooks/useGameSession.js";
+import { useGeolocation } from "./hooks/useGeolocation.js";
 import { useMediaQuery } from "./hooks/useMediaQuery.js";
 import { useUiPrefs } from "./hooks/useUiPrefs.js";
 
@@ -116,7 +117,11 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
   } = useGameSession(boundary, ctx);
 
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
-  const { sidebarOpen, setSidebarOpen } = useUiPrefs(isMobile);
+  const { sidebarOpen, setSidebarOpen, mapMode, setMapMode } = useUiPrefs(isMobile);
+
+  // GPS is session-only and starts only on an explicit toggle — never on load
+  const [gpsOn, setGpsOn] = useState(false);
+  const { supported: gpsSupported, fix: gpsFix, error: gpsError } = useGeolocation(gpsOn);
 
   const [seeker, setSeeker] = useState(() => {
     const last = session.questions[session.questions.length - 1];
@@ -181,6 +186,16 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
                 />
               </label>
             </div>
+            {gpsOn && (
+              <button
+                type="button"
+                className="snap-gps"
+                disabled={!gpsFix}
+                onClick={() => gpsFix && setSeeker({ lat: gpsFix.lat, lng: gpsFix.lng })}
+              >
+                {gpsFix ? "Snap to my location" : "Waiting for a GPS fix…"}
+              </button>
+            )}
           </section>
 
           <QuestionForm
@@ -232,10 +247,17 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
           </div>
         )}
         <MapToolbar
-          isMobile={isMobile}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((o) => !o)}
+          mode={mapMode}
+          onModeChange={setMapMode}
+          gpsSupported={gpsSupported}
+          gpsOn={gpsOn}
+          onToggleGps={() => setGpsOn((v) => !v)}
         />
+        {gpsOn && (gpsError || !gpsFix) && (
+          <div className={gpsError ? "gps-status error" : "gps-status"}>
+            {gpsError || "Locating…"}
+          </div>
+        )}
         <MapView
           boundary={boundary}
           boroughs={boroughs}
@@ -247,6 +269,8 @@ function Tracker({ boundary, boroughs, wards, water, coastline, lines, stations,
           region={displayRegion}
           seeker={seeker}
           onSeekerChange={setSeeker}
+          mapMode={mapMode}
+          gpsFix={gpsFix}
           questions={questions}
           selectedId={selectedId}
           preview={preview}
