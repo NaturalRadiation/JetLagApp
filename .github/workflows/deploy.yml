@@ -25,6 +25,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build # static data is committed under public/data/ — nothing to generate
+        env:
+          # baked into the client bundle at build time; without these the app
+          # falls back to a same-device-only room transport (see src/lib/supabase.js)
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
