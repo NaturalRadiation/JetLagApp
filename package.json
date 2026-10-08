@@ -13,6 +13,7 @@
     "prepare:wards": "node scripts/prepare-wards.mjs",
     "prepare:water": "node scripts/prepare-water.mjs",
     "prepare:poi": "node scripts/prepare-poi.mjs",
+    "prepare:poi-dedupe": "node scripts/prepare-poi-dedupe.mjs",
     "seed:poi": "node scripts/seed-poi.mjs",
     "seed:water": "node scripts/seed-water.mjs",
     "prepare:basemap": "node scripts/prepare-basemap.mjs",
