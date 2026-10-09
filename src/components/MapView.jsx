@@ -52,11 +52,11 @@ L.Icon.Default.mergeOptions({
 const canvasRenderer = L.canvas({ tolerance: 6 });
 
 // the possible area is left as plain map; the ruled-out area (mapBounds minus the
-// possible region) is masked with translucent green
+// possible region) is masked with translucent red
 const RULED_OUT_STYLE = {
-  color: "#65a30d",
+  color: "#dc2626",
   weight: 1,
-  fillColor: "#86efac",
+  fillColor: "#f87171",
   fillOpacity: 0.4,
   interactive: false,
 };
